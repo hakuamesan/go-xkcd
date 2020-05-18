@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path"
 	"strconv"
+	"time"
 )
 
 type Xkcd struct {
@@ -26,13 +28,40 @@ type Xkcd struct {
 	Num        int    `json:"num"`
 }
 
-var debug = true
-
-func downloadAll() {
-	fmt.Println("Getting ALL issues till date")
+type Latest struct {
+	Num int `json:"num"`
 }
 
-func getIssue(num int) error {
+func getLatestCount() int {
+	r, err := http.Get("https://xkcd.com/info.0.json")
+	if err != nil {
+		log.Fatal("Error getting latest count")
+	}
+	defer r.Body.Close()
+
+	latest, _ := ioutil.ReadAll(r.Body)
+	var l Latest
+	json.Unmarshal(latest, &l)
+	if debug == true {
+		log.Println("Total count is : " + strconv.Itoa(l.Num))
+	}
+	totalCount = l.Num
+	return l.Num
+}
+
+var debug = true
+var totalCount = 0
+
+func getComicRange(from int, to int) {
+	log.Println("Getting ALL issues till date")
+	log.Println("Total counts is ", to)
+
+	for i := from; i <= to; i++ {
+		getComic(i)
+	}
+}
+
+func getComic(num int) error {
 	var url string
 	n := strconv.Itoa(num)
 
@@ -42,7 +71,7 @@ func getIssue(num int) error {
 		url = "https://xkcd.com/" + n + "/info.0.json"
 	}
 
-	fmt.Println("Fetching url: " + url)
+	log.Println("Fetching url: " + url)
 
 	r, err := http.Get(url)
 	if err != nil {
@@ -58,10 +87,13 @@ func getIssue(num int) error {
 
 	data, _ := ioutil.ReadAll(r.Body)
 
-	if debug == true {
-		fmt.Println("JSON data is:")
-		fmt.Println(string(data))
-	}
+	/*
+		if debug == true {
+			log.Println("JSON data is:")
+			log.Println(string(data))
+		}
+	*/
+
 	var xkcdImg Xkcd
 	json.Unmarshal(data, &xkcdImg)
 	if n == "0" {
@@ -70,39 +102,54 @@ func getIssue(num int) error {
 
 	imgName := "xkcd-" + n + "-" + path.Base(xkcdImg.Img)
 	if debug == true {
-		fmt.Println("Img Path: " + imgName)
-		fmt.Println(xkcdImg.Alt)
+		log.Println("Img Path: " + imgName)
+		//log.Println(xkcdImg.Alt)
 	}
 
 	fname := "xkcd-" + n + ".txt"
-	fmt.Println("filename: " + fname)
-	f, err := os.Create(fname)
-	if err != nil {
-		return err
-	}
-	txt, err := f.WriteString(xkcdImg.Alt)
-	if err != nil {
-		return err
-	}
-	if txt == 0 {
-		fmt.Println("Filesize is 0")
-	}
-	f.Sync()
-	defer f.Close()
+	log.Println("filename: " + fname)
 
-	img, err := http.Get(xkcdImg.Img)
-	if err != nil {
-		return err
-	}
-	defer img.Body.Close()
-	imgfile, err := os.Create(imgName)
-	_, err = io.Copy(imgfile, img.Body)
+	if _, err := os.Stat(fname); err == nil {
+		log.Println("Txt description already saved. ")
+	} else if os.IsNotExist(err) {
 
-	defer imgfile.Close()
+		f, err := os.Create(fname)
+		if err != nil {
+			return err
+		}
+		txt, err := f.WriteString(xkcdImg.Alt)
+		if err != nil {
+			return err
+		}
+		if txt == 0 {
+			log.Fatal("Filesize is 0")
+		}
+		f.Sync()
+		defer f.Close()
+	}
+
+	if _, err := os.Stat(imgName); err == nil {
+		log.Println("File " + imgName + " exists. Skipping...")
+
+	} else if os.IsNotExist(err) {
+
+		img, err := http.Get(xkcdImg.Img)
+		if err != nil {
+			return err
+		}
+		defer img.Body.Close()
+		imgfile, err := os.Create(imgName)
+		_, err = io.Copy(imgfile, img.Body)
+
+		defer imgfile.Close()
+
+	}
+
 	return err
 }
 
 func main() {
+	startTime := time.Now()
 
 	var (
 		all      bool
@@ -110,26 +157,60 @@ func main() {
 		xrange   int
 		help     bool
 		version  bool
+		from     int
+		to       int
 	)
 
 	flag.BoolVar(&all, "a", false, "Download all")
 	flag.IntVar(&specific, "n", 0, "Download specific number")
 	flag.IntVar(&xrange, "r", 0, "Download a range From To")
+	flag.IntVar(&from, "f", 0, "Download all images starting From")
+	flag.IntVar(&to, "t", 0, "Download all images up To")
 	flag.BoolVar(&help, "h", false, "Display help")
 	flag.BoolVar(&version, "v", false, "Display version")
 	flag.Parse()
 
 	if len(os.Args) == 1 {
-		getIssue(0)
+		getComic(0)
 	} else if help == true {
+		fmt.Println("XKCD Downloader v0.1 ")
+		fmt.Println("-------------------- ")
 		flag.PrintDefaults()
 		os.Exit(1)
 	} else if version == true {
 		fmt.Println("XKCD Downloader v0.1 ")
 	} else if all == true {
-		downloadAll()
+		//downloadAll()
+		from = 1
+		to = getLatestCount()
+		getComicRange(from, to)
+
 	} else if specific != 0 {
-		getIssue(specific)
+		getComic(specific)
 	}
 
+	if from != 0 && to != 0 && from > to {
+		from, to = to, from
+	}
+
+	if to != 0 && from == 0 {
+		from = 1
+	}
+
+	if from != 0 && to == 0 {
+		to = getLatestCount()
+	}
+
+	if from != 0 {
+		log.Println("Starting from " + strconv.Itoa(from))
+	}
+	if to != 0 {
+		log.Println("Ending up to " + strconv.Itoa(to))
+	}
+
+	getComicRange(from, to)
+
+	endTime := time.Now()
+	diff := endTime.Sub(startTime)
+	fmt.Println("Total time taken: ", diff.Seconds(), " seconds")
 }
