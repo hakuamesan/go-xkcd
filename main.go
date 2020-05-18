@@ -1,15 +1,32 @@
 package main
 
 import (
-	//	"encoding/json"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
 	"strconv"
 )
+
+type Xkcd struct {
+	Month      string `json:"month"`
+	Link       string `json:"link"`
+	Year       string `json:"year"`
+	News       string `json:"news"`
+	SafeTitle  string `json:"safe_title"`
+	Transcript string `json:"transcript"`
+	Alt        string `json:"alt"`
+	Img        string `json:"img"`
+	Title      string `json:"title"`
+	Day        string `json:"day"`
+	Num        int    `json:"num"`
+}
+
+var debug = true
 
 func downloadAll() {
 	fmt.Println("Getting ALL issues till date")
@@ -17,10 +34,12 @@ func downloadAll() {
 
 func getIssue(num int) error {
 	var url string
+	n := strconv.Itoa(num)
+
 	if num == 0 { // just the latest issue
 		url = "https://xkcd.com/info.0.json"
 	} else {
-		url = "https://xkcd.com/" + strconv.Itoa(num) + "/info.0.json"
+		url = "https://xkcd.com/" + n + "/info.0.json"
 	}
 
 	fmt.Println("Fetching url: " + url)
@@ -37,7 +56,49 @@ func getIssue(num int) error {
 	}
 	defer out.Close()
 
-	_, err = io.Copy(out, r.Body)
+	data, _ := ioutil.ReadAll(r.Body)
+
+	if debug == true {
+		fmt.Println("JSON data is:")
+		fmt.Println(string(data))
+	}
+	var xkcdImg Xkcd
+	json.Unmarshal(data, &xkcdImg)
+	if n == "0" {
+		n = strconv.Itoa(xkcdImg.Num)
+	}
+
+	imgName := "xkcd-" + n + "-" + path.Base(xkcdImg.Img)
+	if debug == true {
+		fmt.Println("Img Path: " + imgName)
+		fmt.Println(xkcdImg.Alt)
+	}
+
+	fname := "xkcd-" + n + ".txt"
+	fmt.Println("filename: " + fname)
+	f, err := os.Create(fname)
+	if err != nil {
+		return err
+	}
+	txt, err := f.WriteString(xkcdImg.Alt)
+	if err != nil {
+		return err
+	}
+	if txt == 0 {
+		fmt.Println("Filesize is 0")
+	}
+	f.Sync()
+	defer f.Close()
+
+	img, err := http.Get(xkcdImg.Img)
+	if err != nil {
+		return err
+	}
+	defer img.Body.Close()
+	imgfile, err := os.Create(imgName)
+	_, err = io.Copy(imgfile, img.Body)
+
+	defer imgfile.Close()
 	return err
 }
 
