@@ -45,16 +45,14 @@ func getLatestCount() int {
 	if debug == true {
 		log.Println("Total count is : " + strconv.Itoa(l.Num))
 	}
-	totalCount = l.Num
 	return l.Num
 }
 
-var debug = true
-var totalCount = 0
+var debug = false
 
 func getComicRange(from int, to int) {
-	log.Println("Getting ALL issues till date")
-	log.Println("Total counts is ", to)
+	fmt.Println("Getting ALL issues till date")
+	fmt.Println("Total counts is ", to)
 
 	for i := from; i <= to; i++ {
 		getComic(i)
@@ -71,7 +69,7 @@ func getComic(num int) error {
 		url = "https://xkcd.com/" + n + "/info.0.json"
 	}
 
-	log.Println("Fetching url: " + url)
+	fmt.Println("Fetching url: " + url)
 
 	r, err := http.Get(url)
 	if err != nil {
@@ -101,16 +99,15 @@ func getComic(num int) error {
 	}
 
 	imgName := "xkcd-" + n + "-" + path.Base(xkcdImg.Img)
+	fname := "xkcd-" + n + ".txt"
 	if debug == true {
-		log.Println("Img Path: " + imgName)
+		log.Println("[DEBUG] Img Path: " + imgName)
+		log.Println("[DEBUG] filename: " + fname)
 		//log.Println(xkcdImg.Alt)
 	}
 
-	fname := "xkcd-" + n + ".txt"
-	log.Println("filename: " + fname)
-
 	if _, err := os.Stat(fname); err == nil {
-		log.Println("Txt description already saved. ")
+		fmt.Println("[WARN] Txt description is already saved. ")
 	} else if os.IsNotExist(err) {
 
 		f, err := os.Create(fname)
@@ -122,14 +119,14 @@ func getComic(num int) error {
 			return err
 		}
 		if txt == 0 {
-			log.Fatal("Filesize is 0")
+			log.Fatal("[ERROR] Filesize is 0")
 		}
 		f.Sync()
 		defer f.Close()
 	}
 
 	if _, err := os.Stat(imgName); err == nil {
-		log.Println("File " + imgName + " exists. Skipping...")
+		fmt.Println("Image File " + imgName + " exists. Skipping...")
 
 	} else if os.IsNotExist(err) {
 
@@ -168,10 +165,13 @@ func main() {
 	flag.IntVar(&to, "t", 0, "Download all images up To")
 	flag.BoolVar(&help, "h", false, "Display help")
 	flag.BoolVar(&version, "v", false, "Display version")
+	flag.BoolVar(&debug, "d", false, "Verbose debug info")
+
 	flag.Parse()
 
 	if len(os.Args) == 1 {
 		getComic(0)
+		//		os.Exit(1)
 	} else if help == true {
 		fmt.Println("XKCD Downloader v0.1 ")
 		fmt.Println("-------------------- ")
@@ -179,6 +179,7 @@ func main() {
 		os.Exit(1)
 	} else if version == true {
 		fmt.Println("XKCD Downloader v0.1 ")
+		os.Exit(1)
 	} else if all == true {
 		//downloadAll()
 		from = 1
@@ -187,28 +188,41 @@ func main() {
 
 	} else if specific != 0 {
 		getComic(specific)
-	}
+	} else {
 
-	if from != 0 && to != 0 && from > to {
-		from, to = to, from
-	}
+		latest := getLatestCount()
 
-	if to != 0 && from == 0 {
-		from = 1
-	}
+		if from != 0 && to != 0 && from > to {
+			from, to = to, from
+		}
 
-	if from != 0 && to == 0 {
-		to = getLatestCount()
-	}
+		if to != 0 && from == 0 {
+			from = 1
+		}
 
-	if from != 0 {
-		log.Println("Starting from " + strconv.Itoa(from))
-	}
-	if to != 0 {
-		log.Println("Ending up to " + strconv.Itoa(to))
-	}
+		if from != 0 && to == 0 {
+			to = latest
+		}
 
-	getComicRange(from, to)
+		if to > latest {
+			to = latest
+		}
+
+		if from >= latest && to >= latest {
+			getComic(0)
+		} else {
+
+			if from != 0 {
+				log.Println("Starting from " + strconv.Itoa(from))
+			}
+			if to != 0 {
+				log.Println("Ending up to " + strconv.Itoa(to))
+			}
+
+			getComicRange(from, to)
+		}
+
+	}
 
 	endTime := time.Now()
 	diff := endTime.Sub(startTime)
