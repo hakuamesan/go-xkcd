@@ -1,4 +1,4 @@
-# XKCD Downloader
+# Go XKCD Downloader
 
 This tiny program helps you to download all the XKCD comics. (https://xkcd.com)
 
