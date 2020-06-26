@@ -54,7 +54,9 @@ func getComicRange(from int, to int) {
 	fmt.Println("Getting ALL issues till date")
 	fmt.Println("Total counts is ", to)
 
-	for i := from; i <= to; i++ {
+	// changed to the latest getting downloaded first to the oldest
+	// so this works for update that only downloads the newer ones
+	for i := to; i <= from; i-- {
 		getComic(i)
 	}
 }
