@@ -128,7 +128,7 @@ func getComic(num int) error {
 	}
 
 	if _, err := os.Stat(imgName); err == nil {
-		fmt.Println("Image File " + imgName + " exists. Skipping...")
+		log.Fatal("Image File " + imgName + " exists. Skipping...")
 
 	} else if os.IsNotExist(err) {
 
